@@ -4,7 +4,7 @@
 
 **HUD multi-linha acima do prompt do Claude Code, com o Clawd animado em pixel art.**
 
-<img src="https://i.imgur.com/WHTIph2.gif" alt="Clawd animado no HUD" width="720">
+<img src="docs/clawd.gif" alt="Clawd animado no HUD" width="720">
 
 </div>
 
@@ -31,7 +31,7 @@
 O badge do modelo acompanha o modelo ativo da sessão.
 
 <div align="center">
-<img src="https://i.imgur.com/k51L4xy.gif" alt="Alternância de modelo no HUD" width="720">
+<img src="docs/modelo.gif" alt="Alternância de modelo no HUD" width="720">
 </div>
 
 ## Instalação
