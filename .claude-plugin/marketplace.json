@@ -1,0 +1,5 @@
+{
+  "name": "myclaudecode-hud",
+  "owner": { "name": "johwconst" },
+  "plugins": [{ "name": "status-hud", "source": "./" }]
+}

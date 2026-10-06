@@ -1,0 +1,1 @@
+{ "name": "status-hud", "version": "0.1.0", "author": { "name": "johna" }, "description": "HUD multi-linha acima do prompt: contexto, sessão/semana, cache, git, clima", "types": "./types/index.d.ts" }
