@@ -2,6 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
 import type { Act, Hud } from '../types'
+import { SCENE_W, lookFor, scene } from './scene'
+import type { Mode } from './scene'
 
 const hudAtom = atom({ plugin: 'status-hud', key: 'hud' } as const, null)
 const nowAtom = atom({ plugin: 'status-hud', key: 'now' } as const, 0)
@@ -16,26 +18,12 @@ const TEXT = '#d4d4d8'
 const GRAY = '#71717a'
 const TRACK = '#27272a'
 const INK = '#18181b'
-const CLAWD = '#d97757'
-
-// Each model family gets its own colour and hat (5 cells, drawn above the head).
-type Look = { body: string; hat: string; cap: string }
-const LOOKS: [RegExp, Look][] = [
-  [/opus/i, { body: CLAWD, hat: GOLD, cap: '▙▞▚▞▟' }], // crown
-  [/sonnet/i, { body: '#a78bfa', hat: '#a1a1aa', cap: '▄███▄' }], // top hat
-  [/haiku/i, { body: '#7ec699', hat: '#98c379', cap: '  ▞  ' }], // leaf
-  [/fable/i, { body: '#56b6c2', hat: '#c678dd', cap: ' ▗█▖ ' }], // wizard hat
-]
-export const lookFor = (model: string): Look =>
-  LOOKS.find(([r]) => r.test(model))?.[1] ?? { body: CLAWD, hat: GRAY, cap: '     ' }
-
 // The tool to animate: one in flight, or one that just ended (held HOLD frames so a
 // 10ms Read still shows). Otherwise none, and a working Clawd is thinking.
 const HOLD = 3
 export const activeTool = (a: Act, frame: number) =>
   (a.running ?? 0) > 0 || frame < (a.until ?? 0) ? a.tool : undefined
 
-export type Mode = 'idle' | 'sleep' | 'think' | 'read' | 'write' | 'run' | 'agent'
 const SLEEP_MS = 2 * 60 * 1000
 export const modeFor = (working: boolean, tool: string | undefined, idleMs: number): Mode =>
   !working ? (idleMs > SLEEP_MS ? 'sleep' : 'idle')
@@ -44,63 +32,6 @@ export const modeFor = (working: boolean, tool: string | undefined, idleMs: numb
   : /^(Edit|Write|Notebook)/.test(tool) ? 'write'
   : /^(Agent|Task)/.test(tool) ? 'agent'
   : 'run'
-
-// Clawd, 9 cells wide: head, arms, legs.
-const HEAD = ' ▐▛███▜▌ ', SHUT = ' ▐█████▌ ', ARMS = '▝▜█████▛▘', LEGS = '  ▘▘ ▝▝  '
-const HEAD_L = '▗▐▛███▜▌ ', HEAD_R = ' ▐▛███▜▌▖', HEAD_UP = '▗▐▛███▜▌▖'
-const ARMS_L = ' ▜█████▛▘', ARMS_R = '▝▜█████▛ ', ARMS_UP = ' ▜█████▛ ', LEGS_2 = '  ▝▘ ▘▝  '
-export const SPRITE_W = 11
-export const FX_W = 3
-
-// Effects beside Clawd: 3x3 cells of pixel glyphs, one frame list per mode.
-const NO_FX = ['   ', '   ', '   ']
-const FX: Partial<Record<Mode, { color: string; frames: string[][] }>> = {
-  think: { color: GOLD, frames: [['▀▀▜', ' ▟▘', ' ▖ '], ['▀▀▜', ' ▟▘', ' ▖ '], ['▀▀▜', ' ▟▘', ' ▖ '], NO_FX] },
-  sleep: { color: BLUE, frames: [['   ', '   ', 'z  '], ['   ', ' z ', 'z  '], ['  Z', ' z ', '   '], ['  Z', '   ', '   ']] },
-  write: { color: GOLD, frames: [[' * ', '*  ', '   '], ['  +', ' * ', '   ']] },
-  agent: { color: RED, frames: [[' █ ', ' ▀ ', ' ▀ '], NO_FX] },
-}
-
-// Four rows of SPRITE_W cells: hat, head, arms, legs. A one-cell margin each side lets
-// Clawd sway. `fx` is the effect column drawn to the right.
-export function clawd(f: number, mode: Mode, cap: string) {
-  let head = HEAD, arms = ARMS, legs = LEGS, dx = 0, jump = false
-  const blink = f % 12 === 11
-  switch (mode) {
-    case 'idle':
-      if (blink) head = SHUT
-      dx = f % 40 < 3 ? -1 : f % 40 >= 20 && f % 40 < 23 ? 1 : 0
-      break
-    case 'sleep':
-      head = SHUT
-      break
-    case 'think':
-      if (blink) head = SHUT
-      dx = f % 8 < 4 ? 0 : 1
-      break
-    case 'read':
-      dx = [-1, 0, 1, 0][f % 4]!
-      if (blink) head = SHUT
-      break
-    case 'write':
-      ;[head, arms] = f % 2 ? [HEAD_L, ARMS_L] : [HEAD_R, ARMS_R]
-      break
-    case 'run':
-      if (f % 2) [head, arms, legs] = [HEAD_UP, ARMS_UP, LEGS_2]
-      break
-    case 'agent':
-      jump = f % 2 === 1
-      if (jump) [head, arms] = [HEAD_UP, ARMS_UP]
-      break
-  }
-  const hat = `  ${cap}  `
-  const rows = jump ? [head, arms, legs, ''] : [hat, head, arms, legs]
-  const out = rows.map(r => (' '.repeat(1 + dx) + r).padEnd(SPRITE_W))
-  const fx = FX[mode]
-  // Sleep's z's drift slower than the rest.
-  const fxRows = fx ? fx.frames[(mode === 'sleep' ? f >> 1 : f) % fx.frames.length]! : NO_FX
-  return { rows: out, hatRow: !jump, fx: fxRows, fxColor: fx?.color ?? GRAY }
-}
 
 export const fmtTokens = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}k` : `${n}`
@@ -246,7 +177,9 @@ export const register: Register = on => {
 
   on('tool.call', async ($, e, next) => {
     const tool = String(e.tool).split('__').pop()
-    update($, actAtom, a => ({ ...a, tool, n: a.n + 1, running: (a.running ?? 0) + 1 })).catch(() => {})
+    read($, frameAtom)
+      .then(at => update($, actAtom, a => ({ ...a, tool, at, n: a.n + 1, running: (a.running ?? 0) + 1 })))
+      .catch(() => {})
     try {
       return await next(e)
     } finally {
@@ -266,7 +199,8 @@ export const register: Register = on => {
     if (working || lastWorkFrame === undefined) lastWorkFrame = frame
     const look = lookFor(hud.model)
     const tool = activeTool(act, frame)
-    const pic = clawd(frame, modeFor(working, tool, (frame - lastWorkFrame) * TICK), look.cap)
+    const mode = modeFor(working, tool, (frame - lastWorkFrame) * TICK)
+    const pic = scene(frame, mode, look, act.at === undefined ? undefined : frame - act.at)
     const now = (await read($, nowAtom)) || (await $.clock.now())
     const cols = e.props.bodyColumns
 
@@ -310,7 +244,7 @@ export const register: Register = on => {
       { prio: 6, parts: [{ text: time, color: TEXT }, ...(hud.weather ? [{ text: ` ${hud.weather}`, color: GRAY }] : [])] },
       { prio: 7, parts: [{ text: `⏱ ${fmtAge(now - hud.startedAt)}`, color: GRAY }] },
     ]
-    const budget = cols - SPRITE_W - FX_W - 2
+    const budget = cols - SCENE_W - 2
     const row = (shown: Seg[]) => (
       <Text wrap="truncate">
         {shown.map((s, i) => (
@@ -333,10 +267,11 @@ export const register: Register = on => {
     return (
       <Box flexDirection="row">
         <Box flexDirection="column" marginRight={1}>
-          {pic.rows.map((l, i) => (
+          {pic.map((runs, i) => (
             <Text key={`c${i}`}>
-              <Text color={i === 0 && pic.hatRow ? look.hat : look.body}>{l}</Text>
-              <Text color={pic.fxColor} bold>{pic.fx[i] ?? ' '.repeat(FX_W)}</Text>
+              {runs.map((r, j) => (
+                <Text key={`q${j}`} color={r.color} backgroundColor={r.backgroundColor} bold={r.bold} dimColor={r.dimColor}>{r.text}</Text>
+              ))}
             </Text>
           ))}
         </Box>

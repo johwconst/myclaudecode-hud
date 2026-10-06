@@ -18,7 +18,7 @@ export type Hud = {
 }
 
 // running: calls in flight; until: frame the last one's animation holds to
-export type Act = { tool?: string; n: number; running: number; until: number }
+export type Act = { tool?: string; n: number; running: number; until: number; at?: number }
 
 declare module 'claude-code' {
   interface PluginState {

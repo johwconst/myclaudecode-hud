@@ -1,6 +1,7 @@
 import { test, expect } from 'claude-code/testing'
 
-import { fit, fmtAge, fmtTokens, gauge, FX_W, SPRITE_W, activeTool, clawd, lookFor, modeFor, spark, tone } from './register'
+import { activeTool, fit, fmtAge, fmtTokens, gauge, modeFor, spark, tone } from './register'
+import { SCENE_H, SCENE_W, lookFor, scene } from './scene'
 
 test('formatters', () => {
   expect(fmtTokens(950)).toBe('950')
@@ -42,32 +43,6 @@ test('fit keeps the most important segments, in order', () => {
 
 const MODES = ['idle', 'sleep', 'think', 'read', 'write', 'run', 'agent'] as const
 
-test('clawd: every mode and model draws 4 rows of SPRITE_W', () => {
-  for (const m of ['Opus 5.5', 'Sonnet 5.5', 'Haiku 4.5', 'Fable 5.1', 'gpt-x'])
-    for (const mode of MODES)
-      for (let f = 0; f < 48; f++) {
-        const { rows, fx } = clawd(f, mode, lookFor(m).cap)
-        expect(rows.length).toBe(4)
-        for (const r of rows) expect(r.length).toBe(SPRITE_W)
-        expect(fx.length).toBe(3)
-        for (const r of fx) expect(r.length).toBe(FX_W)
-      }
-})
-
-test('clawd: each mode animates', () => {
-  for (const mode of MODES) {
-    const frames = new Set(Array.from({ length: 48 }, (_, f) => { const c = clawd(f, mode, '     '); return [...c.rows, ...c.fx].join('|') }))
-    expect(frames.size).toBeGreaterThan(1)
-  }
-})
-
-test('models get their own look, unknown falls back', () => {
-  const caps = new Set(['opus', 'sonnet', 'haiku', 'fable'].map(m => lookFor(m).cap))
-  expect(caps.size).toBe(4)
-  expect(lookFor('claude-opus-5-5').body).toBe('#d97757')
-  expect(lookFor('whatever').cap.trim()).toBe('')
-})
-
 test('mode follows work state and tool', () => {
   expect(modeFor(false, 'Edit', 0)).toBe('idle')
   expect(modeFor(false, undefined, 10 * 60 * 1000)).toBe('sleep')
@@ -89,7 +64,38 @@ test('a tool animates while running and briefly after, then Clawd thinks', () =>
   expect(activeTool({ tool: 'Bash', n: 3 } as any, 10)).toBeUndefined()
 })
 
-test('think shows a big ? beside Clawd; idle shows none', () => {
-  expect(clawd(0, 'think', '     ').fx.join('').trim()).not.toBe('')
-  expect(clawd(0, 'idle', '     ').fx.join('').trim()).toBe('')
+const text = (rows: { text: string }[][]) => rows.map(r => r.map(p => p.text).join('')).join('|')
+
+test('scene: every mode and model draws SCENE_H rows of SCENE_W cells', () => {
+  for (const m of ['Opus 5.5', 'Sonnet 5.5', 'Haiku 4.5', 'Fable 5.1', 'gpt-x'])
+    for (const mode of MODES)
+      for (let f = 0; f < 48; f++) {
+        const rows = scene(f, mode, lookFor(m), f % 6)
+        expect(rows.length).toBe(SCENE_H)
+        for (const r of rows) expect(r.map(p => p.text).join('').length).toBe(SCENE_W)
+      }
+})
+
+test('scene: each mode animates and looks different from the others', () => {
+  const look = lookFor('opus')
+  const firsts = new Set<string>()
+  for (const mode of MODES) {
+    const frames = new Set(Array.from({ length: 48 }, (_, f) => JSON.stringify(scene(f, mode, look))))
+    expect(frames.size).toBeGreaterThan(1)
+    firsts.add(JSON.stringify(scene(4, mode, look)))
+  }
+  expect(firsts.size).toBe(MODES.length)
+})
+
+test('models get their own look, unknown falls back to no hat', () => {
+  const bodies = new Set(['opus', 'sonnet', 'haiku', 'fable'].map(m => lookFor(m).body + lookFor(m).hat.join()))
+  expect(bodies.size).toBe(4)
+  expect(lookFor('claude-opus-5-5').body).toBe('#d97757')
+  expect(lookFor('whatever').hat).toEqual([])
+})
+
+test('a tool call pops a +1 that fades after four frames', () => {
+  const look = lookFor('opus')
+  expect(text(scene(0, 'idle', look, 0))).toContain('+1')
+  expect(text(scene(0, 'idle', look, 5))).not.toContain('+1')
 })
